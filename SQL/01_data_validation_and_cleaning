@@ -1,0 +1,34 @@
+-- ===========================================================
+-- 1. Data Validation & Cleaning
+-- ===========================================================
+
+
+
+
+WITH duplicate_cte AS(
+	SELECT *, ROW_NUMBER() OVER(PARTITION BY "SK_ID_CURR") AS row_num
+	FROM application_train_staging
+)
+SELECT *
+FROM duplicate_cte
+WHERE row_num > 1; -- No Duplicates
+
+
+/* Note:
+Validated all categorical variables by grouping distinct values. 
+Representative example:
+
+SELECT "CODE_GENDER", COUNT(*)
+FROM application_train_staging
+GROUP BY "CODE_GENDER";
+
+This validation pattern was repeated for all categorical columns.
+*/
+
+
+UPDATE application_train_staging
+SET "OCCUPATION_TYPE" = NULLIF(TRIM("OCCUPATION_TYPE"), '');
+
+
+UPDATE application_train_staging
+SET "NAME_TYPE_SUITE" = NULLIF(TRIM("NAME_TYPE_SUITE"),'');
