@@ -12,7 +12,7 @@
 
 - Weak association: Car Ownership, Real Estate Ownership, Count of Children, Count of Family Members, Suite Type, Income Amount
 
-- Weak standalone association: Credit Amount, Annuity Amount, Goods Price
+- Weak standalone association (recommended for multivariable analysis): Credit Amount, Annuity Amount, Goods Price
 
 */
 
