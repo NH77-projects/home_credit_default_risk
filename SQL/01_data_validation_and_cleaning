@@ -32,3 +32,13 @@ SET "OCCUPATION_TYPE" = NULLIF(TRIM("OCCUPATION_TYPE"), '');
 
 UPDATE application_train_staging
 SET "NAME_TYPE_SUITE" = NULLIF(TRIM("NAME_TYPE_SUITE"),'');
+
+
+
+UPDATE application_train_staging
+SET "DAYS_EMPLOYED" = NULL
+WHERE "DAYS_EMPLOYED" = 365243;
+
+/* Note:
+The value 365243 in DAYS_EMPLOYED is an anomalous placeholder rather than a valid employment duration.
+*/
