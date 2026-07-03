@@ -1,0 +1,353 @@
+-- ===========================================================
+-- 2.1 Individual Value Analysis
+-- ===========================================================
+
+
+
+/* KEY FINDINGS: Individual values' association with default risk includes:
+
+- STRONG association: Occupation Type, Education, Employment Duration
+
+- Moderate association: Gender, Income Type, Region Rating
+
+- Weak association: Car Ownership, Real Estate Ownership, Count of Children, Count of Family Members, Suite Type, Income Amount
+
+- Weak standalone association: Credit Amount, Annuity Amount, Goods Price
+
+*/
+
+
+
+-- Loan Analysis
+SELECT 
+		CASE
+			WHEN "TARGET" = 0 THEN 'No Default'
+			WHEN "TARGET" = 1 THEN 'Default'
+		END AS loan_status,
+	COUNT(*) AS number_of_credits,
+	ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER(), 2) AS pct_of_total,
+	SUM(COUNT(*)) OVER() AS total_number_of_credits
+FROM application_train_staging
+GROUP BY "TARGET";
+
+/* Only 8% of total credits defaulted. */
+
+
+
+SELECT 
+		"NAME_CONTRACT_TYPE" AS contract_type, 
+		COUNT(*) AS number_of_contracts,
+		ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER(), 2) AS pct_of_total,
+		SUM(COUNT(*)) OVER() AS total_number_of_credits
+FROM application_train_staging
+GROUP BY "NAME_CONTRACT_TYPE";
+
+/* Over 90% of the loans are 'Cash Loans'. */
+
+
+
+SELECT 
+		"NAME_CONTRACT_TYPE" AS contract_type, 
+		COUNT(*) AS number_of_contracts,
+		COUNT(*) FILTER(WHERE "TARGET" = 1) AS defaults, 
+		ROUND(100.0 * COUNT(*) FILTER(WHERE "TARGET" = 1) / COUNT(*), 2) AS default_rate
+FROM application_train_staging
+GROUP BY "NAME_CONTRACT_TYPE"; 
+
+/* Although Cash Loans account for the vast majority of issued loans, their default rate (8%) is only
+moderately higher than that of Revolving Loans (5%). */
+
+
+
+-- Gender Analysis
+SELECT 
+		"CODE_GENDER" AS gender,
+		COUNT(*) AS number_of_credits,
+		ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER(), 2) AS pct_of_credits,
+		SUM(COUNT(*)) OVER() AS total_credits
+FROM application_train_staging
+GROUP BY "CODE_GENDER";
+
+/* Majority of borrowers are females, with almost 66%. */
+
+
+
+SELECT
+    "CODE_GENDER",
+    COUNT(*) AS total_loans,
+    COUNT(*) FILTER (WHERE "TARGET" = 1) AS defaults,
+    ROUND(100.0 * COUNT(*) FILTER (WHERE "TARGET" = 1) / COUNT(*), 2) AS default_rate
+FROM application_train_staging
+GROUP BY "CODE_GENDER";
+
+/* Male borrowers had a moderately higher default rate (10%) than female borrowers (7%), indicating a 
+comparatively higher likelihood of default among male clients. */
+
+
+
+-- Car Ownership
+SELECT 
+	"FLAG_OWN_CAR" AS own_car,
+	COUNT(*) AS total_loans,
+	COUNT(*) FILTER(WHERE "TARGET" = 1) AS defaults,
+	ROUND(100.0 * COUNT(*) FILTER(WHERE "TARGET" = 1) / COUNT(*), 2) AS default_rate
+FROM application_train
+GROUP BY "FLAG_OWN_CAR";
+
+/* Despite majority of borrowers owning a car, the default rate in terms of car ownership is very similar,
+which suggest that car ownership is not an indicator for credit default risk. */
+
+
+
+-- Real Estate Ownership
+SELECT 
+	"FLAG_OWN_REALTY" AS own_realty,
+	COUNT(*) AS total_loans,
+	COUNT(*) FILTER(WHERE "TARGET" = 1) AS defaults,
+	ROUND(100.0 * COUNT(*) FILTER(WHERE "TARGET" = 1) / COUNT(*), 2) AS default_rate
+FROM application_train_staging
+GROUP BY "FLAG_OWN_REALTY";
+
+/* Although the majority of borrowers own real estate, the default rates of property owners and non-owners
+are relatively similar. This suggests that real estate ownership alone is not a strong indicator of credit
+default risk in this dataset. */
+
+-- NOTE: For convenience, a standardized function 'default_rate('column_name')' was created to not repeat the same query shown above.
+
+
+
+-- Count of Children
+SELECT
+		CASE
+			WHEN "CNT_CHILDREN" = 0 THEN 'No Children'
+			WHEN "CNT_CHILDREN" = 1 THEN 'One Child'
+			WHEN "CNT_CHILDREN" > 1 THEN 'Multi Children'
+		END AS number_of_children,
+	COUNT(*) AS total_loans,
+	COUNT(*) FILTER(WHERE "TARGET" = 1) AS defaults,
+	ROUND(100.0 * COUNT(*) FILTER(WHERE "TARGET" = 1) / COUNT(*), 2) AS default_rate
+FROM application_train_staging
+GROUP BY number_of_children
+ORDER BY 1;
+
+/* The majority of borrowers have no children. However, default rates vary only slightly across different
+numbers of children, suggesting that the number of children is not strongly associated with credit default
+risk in this dataset. */
+
+
+
+-- Count of Family Members
+SELECT 
+		CASE
+			WHEN "CNT_FAM_MEMBERS" = 1 THEN 'Living Alone'
+			WHEN "CNT_FAM_MEMBERS" = 2 THEN 'Living with a Person'
+			WHEN "CNT_FAM_MEMBERS" > 2 THEN 'Big Family'
+		END AS number_of_family_members,
+	COUNT(*) AS total_loans,
+	COUNT(*) FILTER(WHERE "TARGET" = 1) AS defaults,
+	ROUND(100.0 * COUNT(*) FILTER(WHERE "TARGET" = 1) / COUNT(*), 2) AS default_rate
+FROM application_train_staging
+GROUP BY 1;
+
+/* Although borrowers living alone exhibit the highest default rate (8.8%), followed by those living with
+one other person (8.4%) and larger families (7.6%), the differences are relatively small. Overall, 
+family size does not appear to be strongly associated with credit default risk in this dataset. */
+
+
+
+-- Occupation Type
+SELECT *
+FROM default_rate('OCCUPATION_TYPE');
+
+/* Occupation appears to have a noticeable relationship with default risk. Low-skill laborers have the
+highest default rate (17.15%), whereas accountants have the lowest (4.83%). Manual and service-oriented 
+occupations generally exhibit higher default rates than professional and managerial occupations. */
+
+
+
+-- Suite Type
+SELECT *
+FROM default_rate('NAME_TYPE_SUITE');
+
+/* Default rates vary only slightly across applicant accompaniment types, suggesting that the type of suite
+is not a strong predictor of credit default risk. */
+
+
+
+-- Inocme Type
+SELECT *
+FROM default_rate('NAME_INCOME_TYPE');
+
+/* Although borrowers on maternity leave (40.00%) and unemployed borrowers (36.36%) exhibit the highest 
+default rates, these groups contain only 5 and 22 loan applications, respectively. Due to their extremely
+small sample sizes, these results should be interpreted with caution. Among income type groups with 
+substantial numbers of borrowers, default rates range from 5.39% for pensioners to 9.59% for working 
+individuals, indicating moderate variation in default risk across income types. */
+
+
+
+-- Education Type
+SELECT *
+FROM default_rate('NAME_EDUCATION_TYPE');
+
+/* Education level appears to be associated with credit default risk. Default rates generally decrease as 
+education level increases, ranging from 10.93% among borrowers with lower secondary education to 5.36% among
+those with higher education. Although borrowers holding an academic degree exhibit the lowest default rate
+(1.83%), this group consists of only 164 borrowers and should therefore be interpreted with caution.
+Overall, the findings suggest that higher educational attainment is associated with a lower likelihood of
+default in this dataset. */
+
+
+
+-- Region Rating
+SELECT *
+FROM default_rate('REGION_RATING_CLIENT');
+
+/* Default rates increase consistently with the region rating, ranging from 4.82% for clients with a rating
+of 1 to 11.10% for those with a rating of 3. Clients with a region rating of 2 account for the largest share
+of loan applications (226,984), while ratings 1 and 3 represent smaller borrower groups. Region rating 
+appears to be moderately associated with credit default risk. */
+
+
+
+-- Income Amount
+WITH income_groups AS(
+	SELECT *,
+		NTILE(5) OVER(ORDER BY "AMT_INCOME_TOTAL") AS income_group
+	FROM application_train_staging
+)
+SELECT
+	CASE income_group
+        WHEN 1 THEN 'Lowest 20%'
+        WHEN 2 THEN 'Lower-Middle 20%'
+        WHEN 3 THEN 'Middle 20%'
+        WHEN 4 THEN 'Upper-Middle 20%'
+        WHEN 5 THEN 'Highest 20%'
+    END AS income_bracket,
+    COUNT(*) AS total_loans,
+    COUNT(*) FILTER (WHERE "TARGET" = 1) AS defaults,
+    ROUND(100.0 * COUNT(*) FILTER (WHERE "TARGET" = 1) / COUNT(*), 2) AS default_rate
+FROM income_groups
+GROUP BY income_group
+ORDER BY income_group;
+
+/* Default rates remain relatively consistent across the first four income quintiles, ranging from 
+8.14% to 8.62%. Borrowers in the highest income quintile exhibit a noticeably lower default rate (6.80%),
+suggesting that only the highest-income clients are associated with a modest reduction in default risk. 
+Overall, income demonstrates a weak association with credit default risk, with differences becoming 
+apparent only among the highest earners. */
+
+
+
+-- Credit Amount
+WITH credit_groups AS(
+	SELECT *,
+		NTILE(5) OVER(ORDER BY "AMT_CREDIT") AS credit_group
+	FROM application_train_staging
+)
+SELECT
+	CASE credit_group
+        WHEN 1 THEN 'Lowest 20%'
+        WHEN 2 THEN 'Lower-Middle 20%'
+        WHEN 3 THEN 'Middle 20%'
+        WHEN 4 THEN 'Upper-Middle 20%'
+        WHEN 5 THEN 'Highest 20%'
+    END AS credit_bracket,
+    COUNT(*) AS total_loans,
+    COUNT(*) FILTER (WHERE "TARGET" = 1) AS defaults,
+    ROUND(
+        100.0 * COUNT(*) FILTER (WHERE "TARGET" = 1) / COUNT(*),
+        2
+    ) AS default_rate
+FROM credit_groups
+GROUP BY credit_group
+ORDER BY credit_group;
+
+/* Default rates do not exhibit a consistent trend across credit amount quintiles. The rate increases 
+from 7.18% in the lowest quintile to a peak of 10.05% in the middle quintile before declining to 6.05% 
+among borrowers in the highest credit amount quintile. This non-linear pattern suggests that the credit
+amount alone is not a strong standalone indicator of credit default risk. */
+
+
+
+-- Annuity Amount
+WITH annuity_groups AS(
+		SELECT *, NTILE(5) OVER(ORDER BY "AMT_ANNUITY") AS annuity_group
+		FROM application_train_staging
+)
+	SELECT
+		CASE annuity_group
+        	WHEN 1 THEN 'Lowest 20%'
+       		WHEN 2 THEN 'Lower-Middle 20%'
+        	WHEN 3 THEN 'Middle 20%'
+        	WHEN 4 THEN 'Upper-Middle 20%'
+        	WHEN 5 THEN 'Highest 20%'
+    	END AS annuity_bracket,
+		COUNT(*) AS total_loans,
+		COUNT(*) FILTER(WHERE "TARGET" = 1) AS defaults,
+		ROUND(100.0 * COUNT(*) FILTER(WHERE "TARGET" = 1) / COUNT(*), 2) AS default_rate
+	FROM annuity_groups
+	GROUP BY annuity_group
+	ORDER BY annuity_group;
+
+/* Default rates generally increase across the first four annuity quintiles, rising from 6.95% to 9.33%.
+However, borrowers in the highest annuity quintile exhibit a substantially lower default rate (6.70%), 
+reversing the earlier trend. This non-linear pattern suggests that loan annuity alone is not a strong 
+standalone indicator of credit default risk and may interact with other borrower characteristics, 
+such as income or credit amount. */
+
+
+
+-- Goods Price
+WITH goods_price_groups AS(
+		SELECT *, NTILE(5) OVER(ORDER BY "AMT_GOODS_PRICE") AS goods_price_group
+		FROM application_train_staging
+)
+	SELECT
+		CASE goods_price_group
+        	WHEN 1 THEN 'Lowest 20%'
+       		WHEN 2 THEN 'Lower-Middle 20%'
+        	WHEN 3 THEN 'Middle 20%'
+        	WHEN 4 THEN 'Upper-Middle 20%'
+        	WHEN 5 THEN 'Highest 20%'
+    	END AS goods_price_bracket,
+		COUNT(*) AS total_loans,
+		COUNT(*) FILTER(WHERE "TARGET" = 1) AS defaults,
+		ROUND(100.0 * COUNT(*) FILTER(WHERE "TARGET" = 1) / COUNT(*), 2) AS default_rate
+	FROM goods_price_groups
+	GROUP BY goods_price_group
+	ORDER BY goods_price_group;
+
+/* The price of goods exhibits a pattern similar to the credit amount. Default rates increase steadily
+from the lowest quintile to a peak of 10.37% in the middle quintile, before declining across the 
+upper-middle and highest quintiles to 5.74%. This non-linear relationship suggests that the price of 
+financed goods alone is not a strong standalone indicator of credit default risk and should be further 
+analyzed alongside other borrower characteristics. */
+
+
+
+-- Employment Duration
+WITH days_employed_groups AS(
+		SELECT *, NTILE(5) OVER(ORDER BY "DAYS_EMPLOYED") AS days_employed_group
+		FROM application_train_staging
+		WHERE "DAYS_EMPLOYED" IS NOT NULL
+)
+	SELECT
+			CASE days_employed_group
+			WHEN 1 THEN 'Lowest 20%'
+			WHEN 2 THEN 'Lower-Middle 20%'
+			WHEN 3 THEN 'Middle 20%'
+			WHEN 4 THEN 'Upper-Middle 20%'
+			WHEN 5 THEN 'Upper 20%'
+			END AS duration_bracket,
+			COUNT(*) AS total_loans,
+			COUNT(*) FILTER(WHERE "TARGET" = 1) AS defaults,
+			ROUND(100.0 * COUNT(*) FILTER(WHERE "TARGET" = 1) / COUNT(*), 2) AS default_rate
+	FROM days_employed_groups
+	GROUP BY days_employed_group
+	ORDER BY days_employed_group;
+
+/* Among borrowers with valid employment duration records, default rates increase consistently as 
+employment duration decreases, rising from 5.19% for the longest-employed borrowers to 11.25% for 
+the shortest-employed group. This strong monotonic trend suggests that shorter employment history 
+is associated with a higher likelihood of credit default. */
