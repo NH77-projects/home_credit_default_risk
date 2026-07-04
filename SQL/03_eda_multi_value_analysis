@@ -1,0 +1,131 @@
+-- ===========================================================
+-- 2.2 Multi Value Analysis
+-- ===========================================================
+
+
+
+
+WITH groups AS (
+    SELECT *,
+           NTILE(5) OVER (ORDER BY "AMT_INCOME_TOTAL") AS income_group,
+           NTILE(5) OVER (ORDER BY "AMT_CREDIT") AS credit_group
+    FROM application_train_staging
+)
+SELECT
+    CASE income_group
+        WHEN 1 THEN 'Lowest 20%'
+        WHEN 2 THEN 'Lower-Middle 20%'
+        WHEN 3 THEN 'Middle 20%'
+        WHEN 4 THEN 'Upper-Middle 20%'
+        WHEN 5 THEN 'Highest 20%'
+    END AS income_bucket,
+    ROUND(100.0 * COUNT(*) FILTER (WHERE credit_group = 1 AND "TARGET" = 1) / COUNT(*) FILTER (WHERE credit_group = 1), 2) AS
+"Lowest Credit",
+    ROUND(100.0 * COUNT(*) FILTER (WHERE credit_group = 2 AND "TARGET" = 1)/ COUNT(*) FILTER (WHERE credit_group = 2), 2) AS 
+"Lower-Middle Credit",
+    ROUND( 100.0 * COUNT(*) FILTER (WHERE credit_group = 3 AND "TARGET" = 1)/ COUNT(*) FILTER (WHERE credit_group = 3), 2) AS
+"Middle Credit",
+    ROUND(100.0 * COUNT(*) FILTER (WHERE credit_group = 4 AND "TARGET" = 1)/ COUNT(*) FILTER (WHERE credit_group = 4), 2) AS
+"Upper-Middle Credit",
+    ROUND(100.0 * COUNT(*) FILTER (WHERE credit_group = 5 AND "TARGET" = 1)/ COUNT(*) FILTER (WHERE credit_group = 5), 2) AS
+"Highest Credit"
+FROM groups
+GROUP BY income_group
+ORDER BY income_group;
+
+/* Across all observed credit groups based on the total income of the borrowers a bell shaped 
+pattern can be observed, where regardless of the income level the default risk tends to increase
+towards the middle sized credits, followed by a decline towards higher creddit amounts. With 
+an exception of lower 20%, in all income quintiles the ones which take the highest credit
+tend to have the lowest default rate in comparison to other credit sizes in the same quintiles. 
+Overall, the lowest default rate is evident in the highest 20% earners who take the highest
+credit. */ 
+
+
+
+WITH groups AS (
+    SELECT *,
+           NTILE(5) OVER (ORDER BY "AMT_INCOME_TOTAL") AS income_group,
+           NTILE(5) OVER (ORDER BY "AMT_GOODS_PRICE") AS goods_price_group
+    FROM application_train_staging
+)
+SELECT
+    CASE income_group
+        WHEN 1 THEN 'Lowest 20%'
+        WHEN 2 THEN 'Lower-Middle 20%'
+        WHEN 3 THEN 'Middle 20%'
+        WHEN 4 THEN 'Upper-Middle 20%'
+        WHEN 5 THEN 'Highest 20%'
+    END AS income_bucket,
+ROUND(100.0 * COUNT(*) FILTER (WHERE goods_price_group = 1 AND "TARGET" = 1) / COUNT(*) FILTER (WHERE goods_price_group = 1), 2) 
+AS "Lowest Price",
+ROUND(100.0 * COUNT(*) FILTER (WHERE goods_price_group = 2 AND "TARGET" = 1)/ COUNT(*) FILTER (WHERE goods_price_group = 2), 2) 
+AS "Lower-Middle Price",
+ROUND( 100.0 * COUNT(*) FILTER (WHERE goods_price_group = 3 AND "TARGET" = 1)/ COUNT(*) FILTER (WHERE goods_price_group = 3), 2) 
+AS "Middle Price",
+ROUND(100.0 * COUNT(*) FILTER (WHERE goods_price_group = 4 AND "TARGET" = 1)/ COUNT(*) FILTER (WHERE goods_price_group = 4), 2) 
+AS "Upper-Middle Price",
+ROUND(100.0 * COUNT(*) FILTER (WHERE goods_price_group = 5 AND "TARGET" = 1)/ COUNT(*) FILTER (WHERE goods_price_group = 5), 2) 
+AS "Highest Price"
+FROM groups
+GROUP BY income_group
+ORDER BY income_group;
+
+/* A similar bell-shaped pattern is observed in the relationship between income and 
+goods price quintiles. Across all income groups, default rates generally increase toward
+the middle goods price quintile before declining in the upper goods price quintiles. 
+Furthermore, borrowers in the highest income quintile who also belong to the highest 
+goods price quintile exhibit the lowest default rate (4.91%) across the entire analysis,
+reinforcing the relationship between higher income and lower default risk. */
+
+
+
+WITH groups AS (
+    SELECT *,
+           NTILE(5) OVER (ORDER BY "AMT_INCOME_TOTAL") AS income_group,
+           NTILE(5) OVER (ORDER BY "AMT_ANNUITY") AS annuity_group
+    FROM application_train_staging
+)
+SELECT
+    CASE income_group
+        WHEN 1 THEN 'Lowest 20%'
+        WHEN 2 THEN 'Lower-Middle 20%'
+        WHEN 3 THEN 'Middle 20%'
+        WHEN 4 THEN 'Upper-Middle 20%'
+        WHEN 5 THEN 'Highest 20%'
+    END AS income_bucket,
+    ROUND(100.0 * COUNT(*) FILTER (WHERE annuity_group = 1 AND "TARGET" = 1) / COUNT(*) FILTER (WHERE annuity_group = 1), 2) AS
+"Lowest Annuity",
+    ROUND(100.0 * COUNT(*) FILTER (WHERE annuity_group = 2 AND "TARGET" = 1)/ COUNT(*) FILTER (WHERE annuity_group = 2), 2) AS 
+"Lower-Middle Annuity",
+    ROUND( 100.0 * COUNT(*) FILTER (WHERE annuity_group = 3 AND "TARGET" = 1)/ COUNT(*) FILTER (WHERE annuity_group = 3), 2) AS
+"Middle Annuity",
+    ROUND(100.0 * COUNT(*) FILTER (WHERE annuity_group = 4 AND "TARGET" = 1)/ COUNT(*) FILTER (WHERE annuity_group = 4), 2) AS
+"Upper-Middle Annuity",
+    ROUND(100.0 * COUNT(*) FILTER (WHERE annuity_group = 5 AND "TARGET" = 1)/ COUNT(*) FILTER (WHERE annuity_group = 5), 2) AS
+"Highest Annuity"
+FROM groups
+GROUP BY income_group
+ORDER BY income_group;
+
+/* Across all income quintiles, default rates generally exhibit a non-linear pattern 
+with respect to loan annuity. Default risk tends to increase from the lowest annuity 
+quintiles, reaching its highest levels in the upper-middle annuity quintile, before
+declining among borrowers with the highest annuity amounts. This pattern is observed 
+across most income groups. Additionally, borrowers in the highest income quintile who 
+belong to the highest annuity quintile exhibit the lowest default rate (5.68%), 
+reinforcing the finding that higher-income borrowers consistently present lower credit risk, 
+even when associated with larger loan repayments. */
+
+
+/* Key Findings:
+ Across all multivariable analyses, borrowers in the highest income quintile consistently
+exhibit the lowest default rates, even when associated with larger loans, higher annuity payments,
+or more expensive financed goods.
+
+ The relationships between income and both credit amount and goods price display a
+bell-shaped pattern, with default rates generally peaking in the middle quintiles 
+before declining in the higher quintiles.
+
+ The relationship between income and loan annuity follows a similar non-linear pattern,
+although the trend is less consistent across income groups. */
