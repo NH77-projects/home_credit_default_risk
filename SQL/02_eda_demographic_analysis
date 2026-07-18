@@ -372,7 +372,12 @@ bell-shaped pattern, with default rates generally peaking in the middle quintile
 before declining in the higher quintiles.
 
 - The relationship between income and loan annuity follows a similar non-linear pattern,
-although the trend is less consistent across income groups. */
+although the trend is less consistent across income groups.
+
+- Education remains one of the strongest and most consistent predictors of default risk.
+Its association with lower default rates persists even after accounting for employment duration and occupation type.
+
+*/
 
 
 
@@ -451,6 +456,7 @@ goods price quintile exhibit the lowest default rate (4.91%) across the entire a
 reinforcing the relationship between higher income and lower default risk. */
 
 
+
 -- Income and Annuity
 WITH groups AS (
     SELECT *,
@@ -488,3 +494,78 @@ across most income groups. Additionally, borrowers in the highest income quintil
 belong to the highest annuity quintile exhibit the lowest default rate (5.68%), 
 reinforcing the finding that higher-income borrowers consistently present lower credit risk, 
 even when associated with larger loan repayments. */
+
+
+
+-- Employment Duration and Education
+WITH employment_groups AS(
+			SELECT *, NTILE(5) OVER(ORDER BY "DAYS_EMPLOYED") AS employment_group
+			FROM application_train_staging
+)
+	SELECT 
+			CASE employment_group
+				WHEN 1 THEN 'Longest Employment'
+				WHEN 2 THEN 'Long Employment'
+				WHEN 3 THEN 'Medium Employment'
+				WHEN 4 THEN 'Short Employment'
+				WHEN 5 THEN 'Shortest Employment'
+			END AS employment_duration,
+ROUND(100.0 * COUNT(*) FILTER (WHERE "NAME_EDUCATION_TYPE" = 'Lower secondary' AND "TARGET" = 1) 
+/
+		COUNT(*) FILTER (WHERE "NAME_EDUCATION_TYPE" = 'Lower secondary'), 2) AS "Lower Secondary",
+ROUND(100.0 * COUNT(*) FILTER (WHERE "NAME_EDUCATION_TYPE" = 'Secondary / secondary special' AND "TARGET" = 1)
+/
+		COUNT(*) FILTER (WHERE "NAME_EDUCATION_TYPE" = 'Secondary / secondary special'), 2) AS "Secondary",
+ROUND(100.0 * COUNT(*) FILTER(WHERE "NAME_EDUCATION_TYPE" = 'Incomplete higher' AND "TARGET" = 1) 
+/
+		COUNT(*) FILTER(WHERE "NAME_EDUCATION_TYPE" = 'Incomplete higher'), 2) AS "Incomplete Higher",
+ROUND( 100.0 * COUNT(*) FILTER (WHERE "NAME_EDUCATION_TYPE" = 'Higher education' AND "TARGET" = 1) 
+/
+        COUNT(*) FILTER (WHERE "NAME_EDUCATION_TYPE" = 'Higher education'), 2) AS "Higher Education",
+ROUND(100.0 * COUNT(*) FILTER(WHERE "NAME_EDUCATION_TYPE" = 'Academic degree' AND "TARGET" = 1)
+/
+		COUNT(*) FILTER(WHERE "NAME_EDUCATION_TYPE" = 'Academic degree'), 2) AS "Academic Degree"
+FROM employment_groups
+GROUP BY employment_group
+ORDER BY employment_group;
+
+/* Previous analyses indicated that both longer employment duration and higher 
+education levels were associated with lower default risk. When both variables 
+are considered together, education continues to play a strong role in 
+differentiating default risk across all employment groups. Regardless of 
+employment duration, borrowers with higher education consistently exhibit 
+lower default rates than those with lower levels of education. Conversely,
+even among borrowers with longer employment histories, individuals with lower
+educational level tend to experience higher default rates. */
+
+
+
+-- Occupation and Education
+	SELECT "OCCUPATION_TYPE",
+ROUND(100.0 * COUNT(*) FILTER (WHERE "NAME_EDUCATION_TYPE" = 'Lower secondary' AND "TARGET" = 1) 
+/
+		NULLIF(COUNT(*) FILTER (WHERE "NAME_EDUCATION_TYPE" = 'Lower secondary'), 0), 2) AS "Lower Secondary",
+ROUND(100.0 * COUNT(*) FILTER (WHERE "NAME_EDUCATION_TYPE" = 'Secondary / secondary special' AND "TARGET" = 1)
+/
+		NULLIF(COUNT(*) FILTER (WHERE "NAME_EDUCATION_TYPE" = 'Secondary / secondary special'), 0), 2) AS "Secondary",
+ROUND(100.0 * COUNT(*) FILTER(WHERE "NAME_EDUCATION_TYPE" = 'Incomplete higher' AND "TARGET" = 1) 
+/
+		NULLIF(COUNT(*) FILTER(WHERE "NAME_EDUCATION_TYPE" = 'Incomplete higher'), 0), 2) AS "Incomplete Higher",
+ROUND( 100.0 * COUNT(*) FILTER (WHERE "NAME_EDUCATION_TYPE" = 'Higher education' AND "TARGET" = 1) 
+/
+        NULLIF(COUNT(*) FILTER (WHERE "NAME_EDUCATION_TYPE" = 'Higher education'), 0), 2) AS "Higher Education",
+ROUND(100.0 * COUNT(*) FILTER(WHERE "NAME_EDUCATION_TYPE" = 'Academic degree' AND "TARGET" = 1)
+/
+		NULLIF(COUNT(*) FILTER(WHERE "NAME_EDUCATION_TYPE" = 'Academic degree'), 0), 2) AS "Academic Degree"
+FROM application_train_staging
+WHERE "OCCUPATION_TYPE" IS NOT NULL
+GROUP BY "OCCUPATION_TYPE"
+ORDER BY "OCCUPATION_TYPE";
+
+/* Occupation type was previously identified as a strong indicator of default risk.
+When occupation is analyzed alongside education level, higher educational attainment
+generally remains associated with lower default rates across most occupations.
+This pattern suggests that the relationship between education and lower default risk
+is consistent regardless of profession. While a few occupations exhibit exceptions to 
+this trend, these are generally associated with very small sample sizes and should
+therefore be interpreted with caution. */
