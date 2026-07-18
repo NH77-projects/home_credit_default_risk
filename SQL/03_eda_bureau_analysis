@@ -1,0 +1,421 @@
+-- ===========================================================
+-- 3. Bureau Analysis
+-- ===========================================================
+
+
+/* Key Findings:
+
+- Strong association: External overdue history, Debt-to-Credit Ratio.
+
+- Moderate association: Presence of bureau history
+(borrowers without bureau records exhibit consistently higher default rates).
+
+- Weak or minimal association: Number of external loans, Number of active loans,
+Total external credit, Total external annuity, Credit prolongation.
+
+*/
+
+
+
+
+-- ===========================================================
+-- 3.1 Individual Value Analysis
+-- ===========================================================
+
+
+
+
+-- Credit Types
+SELECT "CREDIT_TYPE", COUNT(*), 
+	ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER(), 2)
+FROM bureau_staging
+GROUP BY "CREDIT_TYPE"
+ORDER BY 2 DESC; 
+
+/* Consumer Credit accounts comprise the majority of bureau records (73%), 
+followed by Credit Cards (23%). The remaining credit types account for only
+a small proportion of external credit history. */
+
+
+
+SELECT 
+    ROUND(AVG(number_of_loans),2) AS avg_loans,
+    MIN(number_of_loans) AS min_loans,
+    MAX(number_of_loans) AS max_loans
+FROM (
+	SELECT 
+		"SK_ID_CURR",
+		COUNT(*) AS number_of_loans
+	FROM bureau_staging
+	GROUP BY "SK_ID_CURR"
+) AS client_loans;
+
+/* Average number of loans per client is approximately 6, with a maximum of 116 loans for a
+single client. */
+
+
+
+-- Number of External Loans per Client
+SELECT 
+	CASE
+		WHEN number_of_loans = 1 THEN 'One Loan'
+		WHEN number_of_loans BETWEEN 2 AND 6 THEN 'Two to Six Loans'
+		WHEN number_of_loans > 6 THEN 'More than Six Loans'
+	END AS loans, 
+	COUNT(*),
+	ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER(), 2) AS pct_loans
+FROM (
+		SELECT 
+			"SK_ID_CURR",
+			COUNT(*) AS number_of_loans
+		FROM bureau_staging
+		GROUP BY "SK_ID_CURR"
+) AS loan_counts
+GROUP BY 1;
+
+/* The majority of borrowers have between two and six external loans (54%),
+while approximately one-third (32%) have more than six. Only a relatively 
+small proportion of borrowers have a single external loan. */
+
+
+
+-- Credit Status
+SELECT "CREDIT_ACTIVE", COUNT(*), 
+	ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER(), 2)
+FROM bureau_staging
+GROUP BY "CREDIT_ACTIVE"
+ORDER BY 2 DESC; 
+
+/* Approximately 63% of all external credit accounts have been closed,
+while the remaining 37% are still active. This indicates that most bureau 
+records represent historical rather than currently active credit obligations. */
+
+
+
+-- External Loans per Client
+WITH loan_status AS(
+	SELECT
+		"SK_ID_CURR",
+		COUNT(*) AS active_loans
+	FROM bureau_staging
+	WHERE "CREDIT_ACTIVE" = 'Active'
+	GROUP BY "SK_ID_CURR"
+)
+SELECT
+		CASE
+			WHEN active_loans = 1 THEN 'One Active Loan'
+			WHEN active_loans BETWEEN 2 AND 6 THEN 'Two to Six Active Loans'
+			ELSE 'More Than Six Active Loans'
+		END AS bucket,
+		COUNT(*) AS num_loans,
+		ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER(), 2) AS pct_loans
+FROM loan_status
+GROUP BY 1
+ORDER BY 1;
+
+/* The majority of borrowers have between two and six active external loans (63%),
+followed by those with a single active loan (34%). Borrowers with more than six 
+active loans represent only a small proportion of the dataset. */
+
+
+
+-- Overdue Status
+SELECT
+	CASE
+    WHEN "CREDIT_DAY_OVERDUE" = 0 THEN 'No Overdue'
+    WHEN "CREDIT_DAY_OVERDUE" BETWEEN 1 AND 30 THEN '1–30 Days'
+    WHEN "CREDIT_DAY_OVERDUE" BETWEEN 31 AND 90 THEN '31–90 Days'
+    ELSE 'Over 90 Days'
+END AS overdue_duration,
+COUNT(*) AS loans,
+ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER(), 2) AS pct_loans
+FROM bureau_staging
+GROUP BY overdue_duration
+ORDER BY overdue_duration;
+
+/* The vast majority of external credit accounts (99.75%) had no recorded overdue days.
+Only a very small proportion of accounts exhibited overdue payments, with less than 0.3% 
+falling into any overdue category. This indicates that overdue occurrences are extremely
+rare in the bureau records. */
+
+
+
+-- Prolong Status
+SELECT 
+		CASE
+			WHEN "CNT_CREDIT_PROLONG" = 0 THEN 'No Prolong'
+			WHEN "CNT_CREDIT_PROLONG" != 0 THEN 'Prolonged'
+		END AS prolong_status,
+		COUNT(*) loans,
+		ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER(), 2) pct_loans
+FROM bureau_staging
+GROUP BY 1
+ORDER BY 1;
+
+/* Only 0.5% of loans have been prolonged. */
+
+
+
+
+-- ===========================================================
+-- 3.2 Multi Value Analysis
+-- ===========================================================
+
+
+
+
+-- Number of Loans and Default Risk
+WITH loan_group AS(
+		SELECT 
+			"SK_ID_CURR",
+			COUNT(*) AS number_of_loans
+		FROM bureau_staging
+		GROUP BY "SK_ID_CURR"
+)
+SELECT 
+		CASE
+			WHEN number_of_loans = 1 THEN '1. One Loan'
+			WHEN number_of_loans BETWEEN 2 AND 6 THEN '2. Two to Six Loans'
+			ELSE '3. More Than Six Loans'
+		END AS loans,
+	COUNT(*) AS borrowers,
+	COUNT(*) FILTER(WHERE a."TARGET" = 1) AS defaults,
+	ROUND(100.0 * COUNT(*) FILTER(WHERE a."TARGET" = 1) / COUNT(*), 2) AS default_rate
+FROM application_train a
+	LEFT JOIN loan_group b
+		ON a."SK_ID_CURR" = b."SK_ID_CURR"
+GROUP BY 1
+ORDER BY 1;
+
+/* The number of external loans held by borrowers shows little association
+with default risk. Default rates remain relatively similar across all loan groups,
+ranging from 7.47% to 8.60%, with no clear increasing or decreasing trend. 
+This suggests that the total number of external loans alone is not a strong indicator of default risk. */
+
+
+
+-- Does having an active loan affect default risk?
+WITH loan_status AS (
+	SELECT
+		"SK_ID_CURR",
+		COUNT(*) AS number_of_active_loans
+	FROM bureau_staging
+	WHERE "CREDIT_ACTIVE" = 'Active'
+	GROUP BY "SK_ID_CURR"
+)
+SELECT 
+	CASE
+		WHEN COALESCE(number_of_active_loans, 0) = 0 THEN 'No Active Loans'
+		WHEN COALESCE(number_of_active_loans, 0) = 1 THEN 'One Active Loan'
+		WHEN COALESCE(number_of_active_loans, 0) BETWEEN 2 AND 6 THEN 'Two to Six Active Loans'
+		ELSE 'More Than Six Active Loans'
+	END AS num_of_active_loans,
+	COUNT(*) AS borrowers,
+	COUNT(*) FILTER(WHERE a."TARGET" = 1) AS defaults,
+	ROUND(100.0 * COUNT(*) FILTER(WHERE a."TARGET" = 1) / COUNT(*), 2) AS default_rate
+FROM application_train_staging a
+	LEFT JOIN loan_status b
+		ON a."SK_ID_CURR" = b."SK_ID_CURR"
+GROUP BY 1
+ORDER BY 1;
+
+/* Overall, the number of active external loans shows little association 
+with default risk among borrowers with up to six active loans,
+where default rates remain relatively similar (7.10%–8.43%). However,
+borrowers with more than six active loans exhibit a substantially higher
+default rate (14.98%). As this group represents a relatively small proportion
+of the dataset, this finding should be interpreted with caution and may warrant 
+further investigation alongside other borrower characteristics. */
+
+
+
+-- Overdue and Default Risk
+WITH overdue_status AS (
+		SELECT
+				"SK_ID_CURR",
+				MAX("CREDIT_DAY_OVERDUE") AS overdue
+		FROM bureau_staging
+		GROUP BY "SK_ID_CURR"
+)
+SELECT 
+		CASE
+   			WHEN overdue IS NULL THEN 'No Bureau History'
+    		WHEN overdue = 0 THEN 'No Overdue'
+    		ELSE 'Has Overdue'
+		END AS overdue_bucket,
+	COUNT(*) AS borrowers,
+	COUNT(*) FILTER(WHERE a."TARGET" = 1) AS defaults,
+	ROUND(100.0 * COUNT(*) FILTER(WHERE a."TARGET" = 1) / COUNT(*), 2) AS default_rate
+FROM application_train_staging a
+	LEFT JOIN overdue_status b
+		ON a."SK_ID_CURR" = b."SK_ID_CURR"
+GROUP BY 1
+ORDER BY 1;
+
+/* Borrowers with at least one overdue external credit account exhibit a 
+substantially higher default rate (15.90%) than borrowers with no recorded 
+overdue history (7.62%). This suggests that the presence of overdue payments
+on external credit accounts is a strong indicator of future default risk,
+with the default rate being more than twice as high among borrowers with overdue records. */
+
+
+
+-- Prolong and Default Risk
+WITH prolonged AS (
+	SELECT
+			"SK_ID_CURR",
+			MAX("CNT_CREDIT_PROLONG") AS prolong
+	FROM bureau_staging
+	GROUP BY "SK_ID_CURR"
+)
+SELECT 
+		CASE
+   			WHEN prolong IS NULL THEN 'No Bureau History'
+    		WHEN prolong = 0 THEN 'No Prolong'
+    		ELSE 'Prolonged'
+		END AS prolong_status,
+	COUNT(*) AS borrowers,
+	COUNT(*) FILTER(WHERE a."TARGET" = 1) AS defaults,
+	ROUND(100.0 * COUNT(*) FILTER(WHERE a."TARGET"= 1) / COUNT(*), 2) AS default_rate
+FROM application_train_staging a
+	LEFT JOIN prolonged b
+		ON a."SK_ID_CURR" = b."SK_ID_CURR"
+GROUP BY 1
+ORDER BY 1;
+
+/* Whether a credit has been prolonged appears to have little
+association with default risk. */
+
+
+
+-- Size of External Credit and Default Risk
+WITH borrower_credit AS (
+    SELECT
+        "SK_ID_CURR",
+        SUM("AMT_CREDIT_SUM") AS total_external_credit
+    FROM bureau_staging
+    GROUP BY "SK_ID_CURR"
+),
+credit_groups AS (
+    SELECT *,
+           NTILE(5) OVER (ORDER BY total_external_credit) AS credit_group
+    FROM borrower_credit
+)
+SELECT 
+		CASE credit_group
+        	WHEN 1 THEN '1. Lowest 20%'
+        	WHEN 2 THEN '2. Lower-Middle 20%'
+        	WHEN 3 THEN '3. Middle 20%'
+        	WHEN 4 THEN '4. Upper-Middle 20%'
+        	WHEN 5 THEN '5. Highest 20%'
+			ELSE '6. No Bureau History'
+		END AS loan_groups,
+	COUNT(*) AS num_loans,
+	COUNT(*) FILTER(WHERE a."TARGET" = 1) AS defaults,
+	ROUND(100.0 * COUNT(*) FILTER(WHERE a."TARGET" = 1) / COUNT(*), 2) AS default_rate
+FROM application_train a
+	LEFT JOIN credit_groups b
+		ON a."SK_ID_CURR" = b."SK_ID_CURR"
+GROUP BY 1
+ORDER BY 1;
+
+/* Among borrowers with external credit history, total external 
+credit exposure shows only a weak association with default risk.
+Default rates generally decline as total external credit increases, 
+ranging from 8.67% in the lowest quintile to 7.13% in the highest quintile, 
+although the trend is not perfectly consistent across all groups.
+Additionally, borrowers with no bureau history exhibit the 
+highest default rate (10.12%), suggesting that the absence of external 
+credit records may itself be associated with elevated default risk. */
+
+
+
+-- Annuity and Default Risk
+WITH borrower_group AS(
+	SELECT 
+			"SK_ID_CURR",
+			SUM("AMT_ANNUITY") AS total_annuity
+	FROM bureau_staging
+	GROUP BY "SK_ID_CURR"
+),
+annuity_group AS (
+	SELECT *,
+		NTILE(5) OVER(ORDER BY total_annuity) AS annuity_groups
+	FROM borrower_group
+)
+ SELECT 
+		CASE annuity_groups
+        	WHEN 1 THEN '1. Lowest 20%'
+        	WHEN 2 THEN '2. Lower-Middle 20%'
+        	WHEN 3 THEN '3. Middle 20%'
+        	WHEN 4 THEN '4. Upper-Middle 20%'
+        	WHEN 5 THEN '5. Highest 20%'
+			ELSE '6. No Bureau History'
+		END AS annuity_group_bucket,
+		COUNT(*) AS borrowers,
+		COUNT(*) FILTER(WHERE a."TARGET" = 1) AS defaults,
+		ROUND(100.0 * COUNT(*) FILTER(WHERE a."TARGET" = 1) / COUNT(*), 2) AS default_rate
+	FROM application_train_staging a
+		LEFT JOIN annuity_group b
+			ON a."SK_ID_CURR" = b."SK_ID_CURR"
+	GROUP BY 1
+	ORDER BY 1;
+
+/* The total external annuity amount exhibits only a weak association
+with default risk. Default rates remain relatively stable across most 
+annuity quintiles, with a slight increase observed only in the 
+lower-middle quintile. No consistent monotonic relationship is evident,
+suggesting that the total external annuity amount alone is not a strong
+predictor of default. Consistent with previous findings, borrowers without 
+bureau history display the highest default rate (10.12%). */
+
+
+
+-- Debt-to-credit Ratio and Default Risk
+WITH grouped_cte AS(
+	SELECT "SK_ID_CURR",
+			SUM("AMT_CREDIT_SUM") AS total_credit,
+			SUM("AMT_CREDIT_SUM_DEBT") AS total_debt
+	FROM bureau_staging
+	GROUP BY "SK_ID_CURR"
+),
+division_cte AS(
+	SELECT *, total_debt / NULLIF(total_credit, 0) AS debt_to_credit
+	FROM grouped_cte
+),
+quantile_cte AS(
+	SELECT *,
+		NTILE(5) OVER(ORDER BY debt_to_credit) AS debt_to_credit_group
+	FROM division_cte
+)
+	SELECT 
+		CASE debt_to_credit_group
+        	WHEN 1 THEN '1. Lowest 20%'
+        	WHEN 2 THEN '2. Lower-Middle 20%'
+        	WHEN 3 THEN '3. Middle 20%'
+        	WHEN 4 THEN '4. Upper-Middle 20%'
+        	WHEN 5 THEN '5. Highest 20%'
+			ELSE '6. No Bureau History'
+		END AS debt_to_credit_bucket,
+		COUNT(*) AS borrowers,
+		COUNT(*) FILTER(WHERE a."TARGET" = 1) AS defaults,
+		ROUND(100.0 * COUNT(*) FILTER(WHERE a."TARGET" = 1) / COUNT(*), 2) AS default_rate,
+		ROUND(AVG(total_credit),2) AS avg_credit,
+		ROUND(AVG(total_debt),2) AS avg_debt,
+		ROUND(AVG(debt_to_credit),2) AS avg_ratio
+	FROM application_train_staging a
+		LEFT JOIN quantile_cte b
+			ON a."SK_ID_CURR" = b."SK_ID_CURR"
+GROUP BY 1
+ORDER BY 1;
+
+/* The debt-to-credit ratio exhibits a strong positive association 
+with default risk. As the proportion of outstanding debt relative 
+to total external credit increases, default rates rise consistently
+from 5.55% in the lowest ratio quintile to 11.50% in the highest quintile. 
+While average outstanding debt increases steadily across the quintiles,
+average total credit follows a bell-shaped pattern, indicating that the 
+observed increase in default risk is driven more by the proportion of 
+unpaid debt than by the overall amount of external credit. This suggests 
+that the debt-to-credit ratio is a more informative indicator of credit risk 
+than either total external credit or outstanding debt considered separately. */
